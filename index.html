@@ -11,25 +11,26 @@
         
         h1 { text-align: center; color: #1a252f; font-size: 32px; margin-top: 10px; margin-bottom: 25px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
         
-        /* CUADRO FLOTANTE EMERGENTE - Alta Visibilidad */
+        /* CUADRO FLOTANTE EMERGENTE - REVISADO Y MÁS GRANDE */
         .floating-total {
             position: fixed;
-            top: 15px;
-            right: 15px;
+            top: 20px;
+            right: 20px;
             background: #2c3e50;
             color: #fff;
-            padding: 12px 18px;
-            border-radius: 10px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            padding: 16px 22px; /* Más amplio */
+            border-radius: 12px;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.4);
             z-index: 1000;
             text-align: center;
-            border: 2px solid #fff;
+            border: 3px solid #fff; /* Borde más grueso para resaltar */
             transition: opacity 0.3s ease, transform 0.3s ease;
+            min-width: 140px;
         }
-        .floating-total .float-label { font-size: 11px; text-transform: uppercase; font-weight: bold; color: #bdc3c7; }
-        .floating-total .float-amount { font-size: 24px; font-weight: 900; color: #2ecc71; margin-top: 2px; display: block; }
+        .floating-total .float-label { font-size: 13px; text-transform: uppercase; font-weight: 900; color: #ecf0f1; letter-spacing: 0.5px; }
+        .floating-total .float-amount { font-size: 28px; font-weight: 900; color: #ffffff; margin-top: 5px; display: block; } /* Ahora blanco puro */
         
-        /* Ocultar suavemente el flotante */
+        /* Ocultar suavemente el flotante al llegar abajo */
         .floating-total.hidden { opacity: 0; pointer-events: none; transform: translateY(-10px); }
 
         /* Contenedor de las tarjetas de productos */
@@ -80,8 +81,8 @@
         button#btn-enviar:disabled { background-color: #bdc3c7; border-color: #95a5a6; cursor: not-allowed; }
 
         @media (max-width: 768px) {
-            .floating-total { top: 10px; right: 10px; padding: 8px 12px; }
-            .floating-total .float-amount { font-size: 20px; }
+            .floating-total { top: 12px; right: 12px; padding: 12px 16px; min-width: 120px; }
+            .floating-total .float-amount { font-size: 24px; }
         }
     </style>
 </head>
@@ -123,7 +124,6 @@
     // IMPORTANTE: Recuerda pegar tu enlace de Google Apps Script dentro de las comillas de abajo
     const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzAynOVbmwQDJXdPa0gQoOMxblSrSVZEOQd7Z1yLADHdcbCAWpq0hIKgOjxau6lYOf28Q/exec";
 
-    // Función auxiliar para dar formato de miles estilo Colombia sin decimales
     function formatearCop(valor) {
         return Math.round(valor).toLocaleString('es-CO', {
             minimumFractionDigits: 0,
@@ -131,7 +131,6 @@
         });
     }
 
-    // Generar las 15 tarjetas organizadas
     const container = document.getElementById('products-container');
     for (let i = 1; i <= 15; i++) {
         const card = document.createElement('div');
@@ -244,7 +243,6 @@
         const inputPaid = card.querySelector('.paid-value');
         const inputPending = card.querySelector('.pending-value');
         
-        // Quitar formato para leer número limpio
         const totalFila = Math.round(parseFloat(card.querySelector('.prod-total').value.replace(/\./g, ''))) || 0;
 
         if (select.value === "Pendiente") {
@@ -311,23 +309,21 @@
 
         let totalPagado = granTotal - totalPendiente;
 
-        // Mostrar valores limpios con formato de miles en las pantallas fijas y flotantes
         document.getElementById('grand-total-val').innerText = formatearCop(granTotal);
         document.getElementById('float-total-val').innerText = formatearCop(granTotal);
         document.getElementById('total-pendiente-val').innerText = formatearCop(totalPendiente);
         document.getElementById('total-pagado-val').innerText = formatearCop(totalPagado);
     }
 
-    // LÓGICA DE DETECCIÓN: Esconde el cuadro flotante cuando el footer entra a la vista
     const floatPopup = document.getElementById('popup-floating');
     const footerSection = document.getElementById('footer-section');
     
     const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
             if (entry.isIntersecting) {
-                floatPopup.classList.add('hidden'); // Ocultar si llegamos al final
+                floatPopup.classList.add('hidden');
             } else {
-                floatPopup.classList.remove('hidden'); // Mostrar si estamos en los productos
+                floatPopup.classList.remove('hidden');
             }
         });
     }, { threshold: 0.1 });
@@ -346,7 +342,6 @@
             const precioStr = card.querySelector('.prod-price').value.trim();
             const cant = parseInt(card.querySelector('.prod-cant').value) || 1;
             
-            // Quitar puntos de formato para mandar el número real a Google Sheets
             const total = Math.round(parseFloat(card.querySelector('.prod-total').value.replace(/\./g, ''))) || 0;
             const tipoPago = card.querySelector('.pay-type').value;
             
