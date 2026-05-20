@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Punto de Venta con Crédito - Minimarket</title>
+    <style>
+        * { box-sizing: border-box; font-family: Arial, sans-serif; }
+        body { margin: 0; padding: 15px; background-color: #f4f6f9; color: #333; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #2c3e50; font-size: 24px; margin-bottom: 20px; }
+        
+        .table-responsive { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        th { background-color: #34495e; color: white; padding: 10px; text-align: left; font-size: 13px; white-space: nowrap; }
+        td { padding: 6px; border-bottom: 1px solid #ddd; vertical-align: middle; }
+        
+        input, select { width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; }
+        input:focus, select:focus { border-color: #3498db; outline: none; }
+        .total-row-input { background-color: #eee; font-weight: bold; border: none; }
+        
+        /* Inputs dinámicos ocultos por defecto */
+        .dinamico { display: none; }
+        .visible { display: block; }
+        
+        /* Totales del Footer */
+        .footer-section { display: flex; flex-direction: column; gap: 15px; margin-top: 20px; padding-top: 15px; border-top: 2px solid #34495e; }
+        .totals-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+        .total-box { background: #f8f9fa; padding: 12px; border-radius: 6px; border-left: 5px solid #34495e; text-align: center; }
+        .total-box.pago { border-left-color: #27ae60; }
+        .total-box.pendiente { border-left-color: #e74c3c; }
+        .total-label { font-size: 12px; text-transform: uppercase; color: #7f8c8d; font-weight: bold; }
+        .total-amount { font-size: 20px; font-weight: bold; color: #2c3e50; margin-top: 5px; }
+        
+        .actions-row { display: flex; justify-content: flex-end; margin-top: 10px; }
+        button { background-color: #27ae60; color: white; border: none; padding: 12px 40px; font-size: 16px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        button:hover { background-color: #219653; }
+        button:disabled { background-color: #bdc3c7; cursor: not-allowed; }
+
+        @media (max-width: 768px) {
+            th, td { padding: 4px; font-size: 11px; }
+            input, select { padding: 4px; font-size: 11px; }
+            .totals-grid { grid-template-columns: 1fr; gap: 8px; }
+            .total-amount { font-size: 16px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Caja Registradora</h1>
+    
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 20%;">Producto</th>
+                    <th style="width: 7%;">Cant.</th>
+                    <th style="width: 11%;">Precio U.</th>
+                    <th style="width: 11%;">Subtotal</th>
+                    <th style="width: 11%;">Medio Pago</th>
+                    <th style="width: 11%;">Tipo Pend.</th>
+                    <th style="width: 11%;">Vlr. Pagado (Abono)</th>
+                    <th style="width: 11%;">Vlr. Pendiente</th>
+                    <th style="width: 11%;">Responsable</th>
+                </tr>
+            </thead>
+            <tbody id="product-rows">
+                </tbody>
+        </table>
+    </div>
+
+    <div class="footer-section">
+        <div class="totals-grid">
+            <div class="total-box">
+                <div class="total-label">Total a pagar</div> <div class="total-amount">$<span id="grand-total-val">0.00</span></div>
+            </div>
+            <div class="total-box pago">
+                <div class="total-label">Total Pagado</div> <div class="total-amount">$<span id="total-pagado-val">0.00</span></div>
+            </div>
+            <div class="total-box pendiente">
+                <div class="total-label">Total Pendiente (Fiado)</div>
+                <div class="total-amount">$<span id="total-pendiente-val">0.00</span></div>
+            </div>
+        </div>
+        
+        <div class="actions-row">
+            <button id="btn-enviar" onclick="enviarDatos()">Enviar Venta</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Recuerda volver a pegar tu URL de Google Apps Script aquí adentro si abres un archivo nuevo
+    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzAynOVbmwQDJXdPa0gQoOMxblSrSVZEOQd7Z1yLADHdcbCAWpq0hIKgOjxau6lYOf28Q/exec";
+
+    // Generar 15 filas limpias al cargar la página
+    const tbody = document.getElementById('product-rows');
+    for (let i = 1; i <= 15; i++) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td><input type="text" class="prod-name" placeholder="Ej. Arroz"></td>
+            <td><input type="number" class="prod-cant" value="1" min="1" oninput="calcularFila(this)"></td>
+            <td><input type="number" class="prod-price" placeholder="0" min="0" oninput="calcularFila(this)"></td>
+            <td><input type="text" class="prod-total total-row-input" value="0.00" readonly></td>
+            <td>
+                <select class="pay-type" onchange="manejarTipoPago(this)">
+                    <option value="Efectivo">Efectivo</option>
+                    <option value="Nequi">Nequi</option>
+                    <option value="Daviplata">Daviplata</option>
+                    <option value="Pendiente">Pendiente</option>
+                </select>
+            </td>
+            <td>
+                <select class="pending-type dinamico" onchange="manejarTipoPendiente(this)">
+                    <option value="Pendiente total">Pendiente Total</option>
+                    <option value="Parcial">Parcial</option>
+                </select>
+            </td>
+            <td>
+                <input type="number" class="paid-value dinamico" placeholder="0" min="0" oninput="calcularValorDesdeAbono(this)" readonly>
+            </td>
+            <td>
+                <input type="number" class="pending-value dinamico" value="0.00" readonly>
+            </td>
+            <td><input type="text" class="responsible-name" placeholder="Quién debe"></td>
+        `;
+        tbody.appendChild(tr);
+    }
+
+    function calcularFila(input) {
+        const fila = input.closest('tr');
+        const cant = parseFloat(fila.querySelector('.prod-cant').value) || 0;
+        const precio = parseFloat(fila.querySelector('.prod-price').value) || 0;
+        
+        const totalFila = cant * precio;
+        fila.querySelector('.prod-total').value = totalFila.toFixed(2);
+        
+        const tipoPago = fila.querySelector('.pay-type').value;
+        const selectPendiente = fila.querySelector('.pending-type');
+        
+        if (tipoPago === "Pendiente") {
+            if (selectPendiente.value === "Pendiente total") {
+                fila.querySelector('.paid-value').value = (0).toFixed(2);
+                fila.querySelector('.pending-value').value = totalFila.toFixed(2);
+            } else {
+                const abono = parseFloat(fila.querySelector('.paid-value').value) || 0;
+                let saldoPendiente = totalFila - abono;
+                if (saldoPendiente < 0) saldoPendiente = 0;
+                fila.querySelector('.pending-value').value = saldoPendiente.toFixed(2);
+            }
+        }
+        
+        calcularGlobales();
+    }
+
+    function manejarTipoPago(select) {
+        const fila = select.closest('tr');
+        const selectPendiente = fila.querySelector('.pending-type');
+        const inputPaid = fila.querySelector('.paid-value');
+        const inputPending = fila.querySelector('.pending-value');
+        const totalFila = parseFloat(fila.querySelector('.prod-total').value) || 0;
+
+        if (select.value === "Pendiente") {
+            selectPendiente.classList.add('visible');
+            inputPaid.classList.add('visible');
+            inputPending.classList.add('visible');
+            
+            selectPendiente.value = "Pendiente total";
+            inputPaid.value = (0).toFixed(2);
+            inputPaid.readOnly = true; 
+            inputPending.value = totalFila.toFixed(2);
+        } else {
+            selectPendiente.classList.remove('visible');
+            inputPaid.classList.remove('visible');
+            inputPending.classList.remove('visible');
+            inputPaid.value = "";
+            inputPending.value = "0.00";
+        }
+        calcularGlobales();
+    }
+
+    function manejarTipoPendiente(select) {
+        const fila = select.closest('tr');
+        const inputPaid = fila.querySelector('.paid-value');
+        const inputPending = fila.querySelector('.pending-value');
+        const totalFila = parseFloat(fila.querySelector('.prod-total').value) || 0;
+
+        if (select.value === "Pendiente total") {
+            inputPaid.value = (0).toFixed(2);
+            inputPaid.readOnly = true;
+            inputPending.value = totalFila.toFixed(2);
+        } else {
+            inputPaid.value = "";
+            inputPaid.readOnly = false;
+            inputPending.value = totalFila.toFixed(2);
+            inputPaid.focus();
+        }
+        calcularGlobales();
+    }
+
+    function calcularValorDesdeAbono(input) {
+        const fila = input.closest('tr');
+        const totalFila = parseFloat(fila.querySelector('.prod-total').value) || 0;
+        const abono = parseFloat(input.value) || 0;
+        
+        let saldoPendiente = totalFila - abono;
+        if(saldoPendiente < 0) saldoPendiente = 0;
+        
+        fila.querySelector('.pending-value').value = saldoPendiente.toFixed(2);
+        calcularGlobales();
+    }
+
+    function calcularGlobales() {
+        let granTotal = 0;
+        let totalPendiente = 0;
+
+        document.querySelectorAll('#product-rows tr').forEach(fila => {
+            const totalFila = parseFloat(fila.querySelector('.prod-total').value) || 0;
+            const tipoPago = fila.querySelector('.pay-type').value;
+            const vlrPendiente = parseFloat(fila.querySelector('.pending-value').value) || 0;
+
+            granTotal += totalFila;
+
+            if (tipoPago === "Pendiente") {
+                totalPendiente += vlrPendiente;
+            }
+        });
+
+        let totalPagado = granTotal - totalPendiente;
+
+        document.getElementById('grand-total-val').innerText = granTotal.toFixed(2);
+        document.getElementById('total-pendiente-val').innerText = totalPendiente.toFixed(2);
+        document.getElementById('total-pagado-val').innerText = totalPagado.toFixed(2);
+    }
+
+    async function enviarDatos() {
+        const boton = document.getElementById('btn-enviar');
+        const filas = document.querySelectorAll('#product-rows tr');
+        let datosAEnviar = [];
+        let validacionPasada = true;
+        let tieneDatos = false;
+
+        filas.forEach((fila, index) => {
+            const producto = fila.querySelector('.prod-name').value.trim();
+            const precioStr = fila.querySelector('.prod-price').value.trim();
+            const cant = parseInt(fila.querySelector('.prod-cant').value) || 1;
+            const total = parseFloat(fila.querySelector('.prod-total').value) || 0;
+            const tipoPago = fila.querySelector('.pay-type').value;
+            const tipoPendiente = tipoPago === "Pendiente" ? fila.querySelector('.pending-type').value : "N/A";
+            
+            const abono = tipoPago === "Pendiente" ? (parseFloat(fila.querySelector('.paid-value').value) || 0) : total;
+            const vlrPendiente = tipoPago === "Pendiente" ? (parseFloat(fila.querySelector('.pending-value').value) || 0) : 0;
+            const responsable = fila.querySelector('.responsible-name').value.trim();
+
+            if ((producto && !precioStr) || (!producto && precioStr)) {
+                alert(`Error en fila ${index + 1}: Todo producto necesita precio y viceversa.`);
+                validacionPasada = false; return;
+            }
+
+            if (producto && precioStr) {
+                if (tipoPago === "Pendiente" && tipoPendiente === "Parcial" && abono > total) {
+                    alert(`Error en fila ${index + 1}: El valor pagado (abono) no puede ser mayor que el total del producto.`);
+                    validacionPasada = false; return;
+                }
+                
+                if (tipoPago === "Pendiente" && !responsable) {
+                    alert(`Error en fila ${index + 1}: Si la cuenta queda Pendiente, debes escribir el Responsable.`);
+                    validacionPasada = false; return;
+                }
+
+                tieneDatos = true;
+                datosAEnviar.push({
+                    producto: producto,
+                    cantidad: cant,
+                    precio_unitario: parseFloat(precioStr),
+                    total: total,
+                    tipo_pago: tipoPago,
+                    tipo_pendiente: tipoPendiente,
+                    valor_pendiente: vlrPendiente,
+                    valor_pagado: abono,
+                    responsable: responsable || "N/A"
+                });
+            }
+        });
+
+        if (!validacionPasada || !tieneDatos) {
+            if(!tieneDatos) alert("Ingresa al menos un producto válido.");
+            return;
+        }
+
+        boton.disabled = true;
+        boton.innerText = "Enviando...";
+
+        try {
+            await fetch(WEB_APP_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ventas: datosAEnviar, fecha: new Date().toLocaleString() })
+            });
+
+            alert("¡Venta y estados de pago registrados con éxito!");
+            document.querySelectorAll('input:not(.prod-cant):not(.prod-total)').forEach(i => i.value = '');
+            document.querySelectorAll('.prod-cant').forEach(i => i.value = '1');
+            document.querySelectorAll('.prod-total').forEach(i => i.value = '0.00');
+            document.querySelectorAll('.pay-type').forEach(s => { s.value = 'Efectivo'; manejarTipoPago(s); });
+            calcularGlobales();
+
+        } catch (error) {
+            alert("Error de conexión al enviar.");
+            console.error(error);
+        } finally {
+            boton.disabled = false;
+            boton.innerText = "Enviar Venta";
+        }
+    }
+</script>
+</body>
+</html>
